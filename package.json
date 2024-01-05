@@ -12,6 +12,8 @@
     "build": "pnpm run clean && pnpm run bundle && ncp appsscript.json dist/appsscript.json",
     "license": "license-check-and-add add -f license-config.json",
     "test": "jest test/ --passWithNoTests --detectOpenHandles",
+    "deploy:init": "pnpm run lint && pnpm run test && pnpm run build && ncp .clasp-dev.json .clasp.json && clasp push -f && source .env && clasp deploy $DEV_DEPLOYMENT_ID",
+    "deploy:init:prod": "pnpm run lint && pnpm run test && pnpm run build && ncp .clasp-prod.json .clasp.json && clasp push && source .env && clasp deploy $PROD_DEPLOYMENT_ID",
     "deploy": "pnpm run lint && pnpm run test && pnpm run build && ncp .clasp-dev.json .clasp.json && clasp push -f && source .env && clasp deploy $DEV_DEPLOYMENT_ID",
     "deploy:prod": "pnpm run lint && pnpm run test && pnpm run build && ncp .clasp-prod.json .clasp.json && clasp push && source .env && clasp deploy $PROD_DEPLOYMENT_ID"
   },
