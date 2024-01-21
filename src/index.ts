@@ -48,7 +48,7 @@ function createResponseMessage(user_name: string, time: number) {
   const end_time = new Date(current_time.getTime() + time * times);
   const response_message = `${user_name}さんが、\n${formatDate(
     current_time
-  )}から\n${time}${unit}利用します。\n(${formatDate(end_time)}まで)`;
+  )}から\n${formatDate(end_time)}まで、\n${time}${unit}利用します。`;
   return response_message;
 }
 
@@ -96,6 +96,6 @@ function getUserProfile(user_id: string) {
 
     return user_profile.displayName; // ユーザーの表示名を返す
   } catch (e) {
-    return '友達ではないので、名前知らないけど、誰か';
+    return '友達ではない名称不明';
   }
 }
