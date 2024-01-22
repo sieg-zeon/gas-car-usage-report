@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
+
 # Usage Report From LINE BOT With GAS
 
 ## Init
@@ -22,6 +23,25 @@ cp .env.sample .env
 
 pnpm i
 ```
+
+## Set GAS Properties
+
+- Set the following properties in the GAS script
+- Script ID
+
+```shell
+pnpm dlx @google/aside init
+```
+
+Set the Script ID in the GAS script to the scriptId in the .clasp-dev.json and .clasp-prod.json
+
+- DEPLOYMENT_ID
+
+```shell
+cp .env.sample .env
+```
+
+Set the Development ID in the GAS script to PROD_DEPLOYMENT_ID and DEV_DEPLOYMENT_ID in the .env
 
 ## Deploy
 
