@@ -46,9 +46,9 @@ function createResponseMessage(user_name: string, time: number) {
     times = 60000;
   }
   const end_time = new Date(current_time.getTime() + time * times);
-  const response_message = `${user_name}さんが、\n${formatDate(
+  const response_message = `${user_name}さんが\n${formatDate(
     current_time
-  )}から\n${formatDate(end_time)}まで、\n${time}${unit}利用します。`;
+  )}から\n${formatDate(end_time)}まで\n${time}${unit}利用します。`;
   return response_message;
 }
 
