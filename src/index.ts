@@ -32,7 +32,7 @@ const doPost = (e: GoogleAppsScript.Events.DoPost) => {
     const response_message = createResponseMessage(user_name, time);
     sendLineMessage(response_message, replyToken);
 
-    recordCarUsage(user_name, time);
+    recordCarUsage(user_id, user_name, time);
   }
 };
 
@@ -104,7 +104,7 @@ function getUserProfile(user_id: string) {
   }
 }
 
-function recordCarUsage(user_name: string, time: number) {
+function recordCarUsage(user_id: string, user_name: string, time: number) {
   try {
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = spreadsheet.getActiveSheet();
@@ -119,6 +119,7 @@ function recordCarUsage(user_name: string, time: number) {
       user_name,
       time,
       timeRange,
+      user_id,
     ];
 
     sheet.appendRow(rowData);
@@ -143,7 +144,7 @@ function sendMonthlyReport() {
     const userUsage = aggregateUserUsage(data);
 
     const totalTime = Object.values(userUsage).reduce(
-      (sum, time) => sum + time,
+      (sum, userData) => sum + userData.time,
       0
     );
 
@@ -186,6 +187,7 @@ function getMonthlyData(
       monthlyData.push({
         userName: row[1],
         usageTime: row[2],
+        userId: row[4],
       });
     }
   }
@@ -194,15 +196,20 @@ function getMonthlyData(
 }
 
 function aggregateUserUsage(
-  data: Array<{ userName: string; usageTime: number }>
+  data: Array<{ userName: string; usageTime: number; userId: string }>
 ) {
-  const userUsage: { [key: string]: number } = {};
+  const userUsage: { [key: string]: { time: number; userName: string } } = {};
 
   data.forEach(record => {
-    if (userUsage[record.userName]) {
-      userUsage[record.userName] += record.usageTime;
+    if (userUsage[record.userId]) {
+      userUsage[record.userId].time += record.usageTime;
+      // 最新のユーザー名で更新（最後に記録されたものが最新）
+      userUsage[record.userId].userName = record.userName;
     } else {
-      userUsage[record.userName] = record.usageTime;
+      userUsage[record.userId] = {
+        time: record.usageTime,
+        userName: record.userName,
+      };
     }
   });
 
@@ -210,7 +217,7 @@ function aggregateUserUsage(
 }
 
 function generateReportMessage(
-  userUsage: { [key: string]: number },
+  userUsage: { [key: string]: { time: number; userName: string } },
   totalTime: number,
   lastMonth: { year: number; month: number }
 ) {
@@ -219,9 +226,11 @@ function generateReportMessage(
   message += `👥 利用者数: ${Object.keys(userUsage).length}名\n\n`;
   message += `📈 利用時間ランキング:\n`;
 
-  const sortedUsers = Object.entries(userUsage).sort(([, a], [, b]) => b - a);
+  const sortedUsers = Object.entries(userUsage).sort(
+    ([, a], [, b]) => b.time - a.time
+  );
 
-  sortedUsers.forEach(([userName, time], index) => {
+  sortedUsers.forEach(([, { time, userName }], index) => {
     const percentage = totalTime > 0 ? Math.round((time / totalTime) * 100) : 0;
     const rank = index + 1;
     let rankEmoji = '';
@@ -281,7 +290,13 @@ function initializeSpreadsheet() {
     const sheet = spreadsheet.getActiveSheet();
 
     // ヘッダー行を設定
-    const headers = ['記録時間', 'ユーザー名', '利用時間(時間)', '利用時間帯'];
+    const headers = [
+      '記録時間',
+      'ユーザー名',
+      '利用時間(時間)',
+      '利用時間帯',
+      'ユーザーID',
+    ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
     // ヘッダー行のスタイルを設定
