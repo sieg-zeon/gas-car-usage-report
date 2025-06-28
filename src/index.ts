@@ -16,6 +16,8 @@
 const prop = PropertiesService.getScriptProperties().getProperties();
 
 const ACCESS_TOKEN = prop.ACCESS_TOKEN;
+const SPREADSHEET_ID = prop.SPREADSHEET_ID;
+const GROUP_ID = prop.GROUP_ID;
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const doPost = (e: GoogleAppsScript.Events.DoPost) => {
@@ -29,6 +31,8 @@ const doPost = (e: GoogleAppsScript.Events.DoPost) => {
     const time = Number(message_text);
     const response_message = createResponseMessage(user_name, time);
     sendLineMessage(response_message, replyToken);
+
+    recordCarUsage(user_name, time);
   }
 };
 
@@ -97,5 +101,195 @@ function getUserProfile(user_id: string) {
     return user_profile.displayName; // ユーザーの表示名を返す
   } catch (e) {
     return '友達ではない名称不明';
+  }
+}
+
+function recordCarUsage(user_name: string, time: number) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getActiveSheet();
+
+    const current_time = new Date();
+    const end_time = new Date(current_time.getTime() + time * 3600000);
+
+    const timeRange = `${Utilities.formatDate(current_time, 'JST', 'HH:mm')}-${Utilities.formatDate(end_time, 'JST', 'HH:mm')}`;
+
+    const rowData = [
+      Utilities.formatDate(current_time, 'JST', 'yyyy/MM/dd HH:mm:ss'),
+      user_name,
+      time,
+      timeRange,
+    ];
+
+    sheet.appendRow(rowData);
+  } catch (e) {
+    console.error('スプレッドシートへの記録に失敗しました:', e);
+  }
+}
+
+// 月次レポートを生成してLINEグループに送信する関数
+// この関数は毎月1日のGASトリガーで実行される
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function sendMonthlyReport() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getActiveSheet();
+
+    const lastMonth = getLastMonth();
+    const data = getMonthlyData(sheet, lastMonth);
+
+    if (!data.length) return;
+
+    const userUsage = aggregateUserUsage(data);
+
+    const totalTime = Object.values(userUsage).reduce(
+      (sum, time) => sum + time,
+      0
+    );
+
+    const reportMessage = generateReportMessage(
+      userUsage,
+      totalTime,
+      lastMonth
+    );
+
+    sendLineGroupMessage(reportMessage);
+  } catch (e) {
+    console.error('月次レポートの送信に失敗しました:', e);
+  }
+}
+
+function getLastMonth() {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return {
+    year: lastMonth.getFullYear(),
+    month: lastMonth.getMonth() + 1,
+  };
+}
+
+function getMonthlyData(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  targetMonth: { year: number; month: number }
+) {
+  const data = sheet.getDataRange().getValues();
+  const monthlyData = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const recordDate = new Date(row[0]);
+
+    if (
+      recordDate.getFullYear() === targetMonth.year &&
+      recordDate.getMonth() + 1 === targetMonth.month
+    ) {
+      monthlyData.push({
+        userName: row[1],
+        usageTime: row[2],
+      });
+    }
+  }
+
+  return monthlyData;
+}
+
+function aggregateUserUsage(
+  data: Array<{ userName: string; usageTime: number }>
+) {
+  const userUsage: { [key: string]: number } = {};
+
+  data.forEach(record => {
+    if (userUsage[record.userName]) {
+      userUsage[record.userName] += record.usageTime;
+    } else {
+      userUsage[record.userName] = record.usageTime;
+    }
+  });
+
+  return userUsage;
+}
+
+function generateReportMessage(
+  userUsage: { [key: string]: number },
+  totalTime: number,
+  lastMonth: { year: number; month: number }
+) {
+  let message = `📊 ${lastMonth.year}年${lastMonth.month}月の車利用レポート 📊\n\n`;
+  message += `🚗 総利用時間: ${totalTime}時間\n`;
+  message += `👥 利用者数: ${Object.keys(userUsage).length}名\n\n`;
+  message += `📈 利用時間ランキング:\n`;
+
+  const sortedUsers = Object.entries(userUsage).sort(([, a], [, b]) => b - a);
+
+  sortedUsers.forEach(([userName, time], index) => {
+    const percentage = totalTime > 0 ? Math.round((time / totalTime) * 100) : 0;
+    const rank = index + 1;
+    let rankEmoji = '';
+    let usageEmoji = '';
+
+    // ランキングに応じて絵文字を設定
+    if (rank === 1) rankEmoji = '1️⃣';
+    else if (rank === 2) rankEmoji = '2️⃣';
+    else if (rank === 3) rankEmoji = '3️⃣';
+    else rankEmoji = `${rank}️⃣`;
+
+    // 利用時間に応じて絵文字を設定
+    if (time >= 30)
+      usageEmoji = '🚗'; // 30時間以上
+    else if (time >= 20)
+      usageEmoji = '🚙'; // 20時間以上
+    else if (time >= 10)
+      usageEmoji = '🚐'; // 10時間以上
+    else usageEmoji = '🛵'; // 10時間未満
+
+    message += `${rankEmoji} ${userName}さん: ${time}時間 (${percentage}%) ${usageEmoji}\n`;
+  });
+
+  message += `\n✨ 今月も安全運転でお願いします！ ✨`;
+
+  return message;
+}
+
+function sendLineGroupMessage(message: string) {
+  const url = 'https://api.line.me/v2/bot/message/push';
+  const headers = {
+    'Content-Type': 'application/json; charset=UTF-8',
+    'Authorization': 'Bearer ' + ACCESS_TOKEN,
+  };
+  const postData = {
+    to: GROUP_ID,
+    messages: [
+      {
+        type: 'text',
+        text: message,
+      },
+    ],
+  };
+
+  UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: headers,
+    payload: JSON.stringify(postData),
+  });
+}
+
+// スプレッドシートを初期化する関数（初回実行時のみ使用）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function initializeSpreadsheet() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getActiveSheet();
+
+    // ヘッダー行を設定
+    const headers = ['記録時間', 'ユーザー名', '利用時間(時間)', '利用時間帯'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+    // ヘッダー行のスタイルを設定
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sheet.getRange(1, 1, 1, headers.length).setBackground('#f0f0f0');
+
+    console.log('スプレッドシートの初期化が完了しました');
+  } catch (e) {
+    console.error('スプレッドシートの初期化に失敗しました:', e);
   }
 }
