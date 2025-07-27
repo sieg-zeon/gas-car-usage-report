@@ -243,8 +243,8 @@ function generateReportMessage(
     else rankEmoji = `${rank}️⃣`;
 
     // 利用時間に応じて絵文字を設定
-    if (time >= 30)
-      usageEmoji = '🚗'; // 30時間以上
+    if (time >= 35)
+      usageEmoji = '🚗'; // 35時間以上
     else if (time >= 20)
       usageEmoji = '🚙'; // 20時間以上
     else if (time >= 10)
