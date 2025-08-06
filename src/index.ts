@@ -141,10 +141,18 @@ function sendMonthlyReport() {
 }
 
 // 年次レポートを生成してLINEグループに送信する関数
-// この関数は毎年1月1日のGASトリガーで実行される
+// この関数は毎月1日のGASトリガーで実行され、1月の場合のみ年次レポートを送信
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function sendYearlyReport() {
   try {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1月は1、12月は12
+
+    // 1月以外の場合は何もしない
+    if (currentMonth !== 1) {
+      return;
+    }
+
     const lastYear = getLastYear();
     sendPeriodReport(lastYear, 'year');
   } catch (e) {
