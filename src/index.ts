@@ -133,31 +133,52 @@ function recordCarUsage(user_id: string, user_name: string, time: number) {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function sendMonthlyReport() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = spreadsheet.getActiveSheet();
-
     const lastMonth = getLastMonth();
-    const data = getMonthlyData(sheet, lastMonth);
-
-    if (!data.length) return;
-
-    const userUsage = aggregateUserUsage(data);
-
-    const totalTime = Object.values(userUsage).reduce(
-      (sum, userData) => sum + userData.time,
-      0
-    );
-
-    const reportMessage = generateReportMessage(
-      userUsage,
-      totalTime,
-      lastMonth
-    );
-
-    sendLineGroupMessage(reportMessage);
+    sendPeriodReport(lastMonth, 'month');
   } catch (e) {
     console.error('月次レポートの送信に失敗しました:', e);
   }
+}
+
+// 年次レポートを生成してLINEグループに送信する関数
+// この関数は毎年1月1日のGASトリガーで実行される
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function sendYearlyReport() {
+  try {
+    const lastYear = getLastYear();
+    sendPeriodReport(lastYear, 'year');
+  } catch (e) {
+    console.error('年次レポートの送信に失敗しました:', e);
+  }
+}
+
+// 共通の期間レポート送信関数
+function sendPeriodReport(
+  targetPeriod: { year: number; month?: number },
+  periodType: 'month' | 'year'
+) {
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = spreadsheet.getActiveSheet();
+
+  const data = getPeriodData(sheet, targetPeriod, periodType);
+
+  if (!data.length) return;
+
+  const userUsage = aggregateUserUsage(data);
+
+  const totalTime = Object.values(userUsage).reduce(
+    (sum, userData) => sum + userData.time,
+    0
+  );
+
+  const reportMessage = generatePeriodReportMessage(
+    userUsage,
+    totalTime,
+    targetPeriod,
+    periodType
+  );
+
+  sendLineGroupMessage(reportMessage);
 }
 
 function getLastMonth() {
@@ -169,30 +190,49 @@ function getLastMonth() {
   };
 }
 
-function getMonthlyData(
+function getLastYear() {
+  const now = new Date();
+  const lastYear = new Date(now.getFullYear() - 1, 0, 1);
+  return {
+    year: lastYear.getFullYear(),
+  };
+}
+
+function getPeriodData(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
-  targetMonth: { year: number; month: number }
+  targetPeriod: { year: number; month?: number },
+  periodType: 'month' | 'year'
 ) {
   const data = sheet.getDataRange().getValues();
-  const monthlyData = [];
+  const periodData = [];
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const recordDate = new Date(row[0]);
 
-    if (
-      recordDate.getFullYear() === targetMonth.year &&
-      recordDate.getMonth() + 1 === targetMonth.month
-    ) {
-      monthlyData.push({
-        userName: row[1],
-        usageTime: row[2],
-        userId: row[4],
-      });
+    if (periodType === 'month') {
+      if (
+        recordDate.getFullYear() === targetPeriod.year &&
+        recordDate.getMonth() + 1 === targetPeriod.month
+      ) {
+        periodData.push({
+          userName: row[1],
+          usageTime: row[2],
+          userId: row[4],
+        });
+      }
+    } else if (periodType === 'year') {
+      if (recordDate.getFullYear() === targetPeriod.year) {
+        periodData.push({
+          userName: row[1],
+          usageTime: row[2],
+          userId: row[4],
+        });
+      }
     }
   }
 
-  return monthlyData;
+  return periodData;
 }
 
 function aggregateUserUsage(
@@ -216,12 +256,20 @@ function aggregateUserUsage(
   return userUsage;
 }
 
-function generateReportMessage(
+function generatePeriodReportMessage(
   userUsage: { [key: string]: { time: number; userName: string } },
   totalTime: number,
-  lastMonth: { year: number; month: number }
+  targetPeriod: { year: number; month?: number },
+  periodType: 'month' | 'year'
 ) {
-  let message = `📊 ${lastMonth.year}年${lastMonth.month}月の車利用レポート 📊\n\n`;
+  let periodTitle = '';
+  if (periodType === 'month') {
+    periodTitle = `${targetPeriod.year}年${targetPeriod.month}月`;
+  } else {
+    periodTitle = `${targetPeriod.year}年`;
+  }
+
+  let message = `📊 ${periodTitle}の車利用レポート 📊\n\n`;
   message += `🚗 総利用時間: ${totalTime}時間\n`;
   message += `👥 利用者数: ${Object.keys(userUsage).length}名\n\n`;
   message += `📈 利用時間ランキング:\n`;
